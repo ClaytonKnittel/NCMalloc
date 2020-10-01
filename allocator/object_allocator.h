@@ -14,9 +14,8 @@
 #include <allocator/slab_size_classes.h>
 
 
-#include <debug/backtracer.h>
 
-#define OBJ_DBG_ASSERT(X)  // assert(X)
+#define OBJ_DBG_ASSERT(X)  assert(X)
 
 namespace alloc {
 
@@ -149,9 +148,6 @@ struct object_allocator {
 #define SEND_SLAB_BRANCHES 1
     void
     _send_slab(slab_t * slab, const uint32_t size_idx) {
-
-        DBG_PUSH_FRAME(slab);
-        DBG_PUSH_FRAME(slab->next);
 
         OBJ_DBG_ASSERT(slab->next == NULL);
         static_assert(slab_t::next_offset == OBJ_SLAB_NEXT_OFFSET);
@@ -293,14 +289,11 @@ struct object_allocator {
         // clang-format on
 #endif
 
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].available_slabs_head);
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].available_slabs_tail);
     }
 
 
     uint64_t
     try_pop(const uint32_t size_idx) {
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].fc.current_idx);
 
 #pragma GCC diagnostic ignored "-Wuninitialized"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"  // NOLINT
@@ -342,14 +335,11 @@ struct object_allocator {
                       [ LOG_SIZEOF_SM ] "i" (_log_sizeof_slab_manager)
                     : "cc");
         // clang-format on
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].fc.current_idx);
-        DBG_PUSH_FRAME(ret);
         return ret;
     }
 
     uint64_t
     try_push(uint64_t ptr, const uint32_t size_idx) {
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].fc.current_idx);
 #pragma GCC diagnostic ignored "-Wuninitialized"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"  // NOLINT
         uint64_t idx, fc_cache;
@@ -391,10 +381,8 @@ struct object_allocator {
                     : "cc", "memory"
                     : no_push);
         // clang-format on
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].fc.current_idx);
         return 0;
     no_push:
-        DBG_PUSH_FRAME(m->slab_managers[get_start_cpu()].fc.current_idx);
         return 1;
     }
 
@@ -403,13 +391,10 @@ struct object_allocator {
     _allocate_inner(const uint32_t size_idx) {
         while (1) {
             const uint64_t start_cpu = get_start_cpu();
-            DBG_PUSH_FRAME(start_cpu);
             IMPOSSIBLE_COND(start_cpu >= NPROCS);
 
             slab_manager_t * sm = m->slab_managers[size_idx] + start_cpu;
             slab_t *         _available_slabs_head = sm->available_slabs_head;
-            DBG_PUSH_FRAME(sm);
-            DBG_PUSH_FRAME(_available_slabs_head);
 
             OBJ_DBG_ASSERT(
                 (((uint64_t)_available_slabs_head) % sizeof(obj_slab)) == 0);
@@ -419,61 +404,47 @@ struct object_allocator {
                             sizeof(obj_slab)) == 0);
 
 
-            DBG_PUSH_FRAME(_available_slabs_head);
             if (BRANCH_UNLIKELY(_available_slabs_head == NULL)) {
                 if (m->slab_allocator.out_of_memory(end)) {
-                    DBG_PUSH_FRAME(end);
                     return NULL;
                 }
 
                 slab_t * new_slab = m->slab_allocator._new();
-                DBG_PUSH_FRAME(new_slab);
                 OBJ_DBG_ASSERT((((uint64_t)new_slab) % sizeof(obj_slab)) == 0);
 
                 if ((new_slab) >= ((slab_t *)end)) {
-                    DBG_PUSH_FRAME(end);
                     return NULL;
                 }
-                DBG_PUSH_FRAME(new_slab->available_vecs);
                 new ((void * const)new_slab) slab_t(idx_to_size(size_idx));
 
                 OBJ_DBG_ASSERT(new_slab != NULL);
                 OBJ_DBG_ASSERT(new_slab->next == NULL);
                 _send_slab(new_slab, size_idx);
 
-                DBG_PUSH_FRAME(sm->available_slabs_head);
-                DBG_PUSH_FRAME(sm->available_slabs_tail);
             }
             else {
 
                 uint64_t ret = _available_slabs_head->_allocate(start_cpu);
 
-                DBG_PUSH_FRAME(_available_slabs_head->state);
-                DBG_PUSH_FRAME(ret);
                 if (BRANCH_LIKELY(ret < slab_t::SUCCESS_BOUND)) {
                     return (void *)(_available_slabs_head->payload +
                                     idx_to_size(size_idx) * ret);
                 }
                 else if (ret != slab_t::FAILURE::MIGRATED) {
-                    DBG_PUSH_FRAME(sm->available_slabs_head);
                     if (!sm->_cas_set_next_available_slab(
                             start_cpu,
                             _available_slabs_head)) {
 
-                        DBG_PUSH_FRAME(sm->available_slabs_head);
                         OBJ_DBG_ASSERT(sm->available_slabs_head !=
                                        _available_slabs_head);
                         OBJ_DBG_ASSERT(_available_slabs_head->state ==
                                        slab_t::OWNED);
-                        DBG_PUSH_FRAME(_available_slabs_head->state);
                         if (!_available_slabs_head->_try_release()) {
-                            DBG_PUSH_FRAME(_available_slabs_head->state);
                             _available_slabs_head->next = NULL;
                             _send_slab(_available_slabs_head, size_idx);
                             OBJ_DBG_ASSERT(_available_slabs_head->state ==
                                            slab_t::OWNED);
                         }
-                        DBG_PUSH_FRAME(_available_slabs_head->state);
                     }
                 }
             }
@@ -484,9 +455,7 @@ struct object_allocator {
     _allocate(const uint32_t size) {
         const uint32_t size_idx = size_to_idx(size);
         uint64_t       ptr      = try_pop(size_idx);
-        DBG_PUSH_FRAME(ptr);
         if (ptr > ((1UL) << _log_sizeof_slab_manager)) {
-            DBG_PUSH_FRAME(((1UL) << _log_sizeof_slab_manager));
             return (void *)ptr;
         }
         return _allocate_inner(size_idx);
@@ -548,7 +517,7 @@ struct object_allocator {
                     ((uint64_t)m + sizeof(memory_layout_t)),
                     get_slab_region_size()));
         for (uint32_t i = 0; i < NPROCS; ++i) {
-            for (uint32_t _i = 0; _i < num_size_classes; ++_i) {
+            for (uint32_t _i = 1; _i < 2; ++_i) {
                 fprintf(stderr, "[%d]", i);
                 m->slab_managers[_i][i].print_status_full();
             }

@@ -36,7 +36,6 @@ typedef struct targs {
 
 void *
 alloc_only(void * targ) {
-    DBG_REGISTER();
     total_nsec = 0;
     sum        = 0;
 
@@ -150,6 +149,7 @@ alloc_free_alloc(void * targ) {
     for (uint32_t i = 0; i < idx; ++i) {
         allocator->_free(ptrs[i]);
     }
+
     pthread_barrier_wait(&b);
     memset(ptrs, 0, sizeof(test_t *) * test_size);
     pthread_barrier_wait(&b);
@@ -230,7 +230,6 @@ main(int argc, char ** argv) {
     ADD_ARG("-r", false, Int, run_mask, "Bit mask of tests to run");
     PARSE_ARGUMENTS;
 
-    DBG_INIT();
     ERROR_ASSERT(!pthread_barrier_init(&b, NULL, nthread));
 
     allocator_t allocator;

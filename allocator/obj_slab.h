@@ -8,13 +8,12 @@
 #include <concurrency/bitvec_atomics.h>
 #include <concurrency/rseq/rseq_base.h>
 
-#include <debug/backtracer.h>
 #include <misc/cpp_attributes.h>
 #include <optimized/bits.h>
 #include <optimized/const_math.h>
 #include <system/sys_info.h>
 
-#define OBJ_SLAB_ASSERT(X)  // assert(X)
+#define OBJ_SLAB_ASSERT(X) assert(X)
 
 //#define CACHE_MOST_RECENT
 
@@ -84,7 +83,12 @@ struct obj_slab {
         memset(available_slots, -1, (nslots - 1) * sizeof(uint64_t));
 
         // calculate partial fullness and set
-        available_slots[nslots - 1] = ((1UL) << (nblocks - 64 * nslots)) - 1;
+        if (nblocks % 64) {
+            available_slots[nslots - 1] = ((1UL) << (nblocks % 64)) - 1;
+        }
+        else {
+            available_slots[nslots - 1] = ~(0UL);
+        }
     }
 
 
@@ -213,9 +217,6 @@ struct obj_slab {
             : "cc");
         // clang-format on
 
-        DBG_PUSH_FRAME(available_vecs);
-        DBG_PUSH_FRAME(idx);
-        DBG_PUSH_FRAME(state);
         return idx;
     }
 
@@ -224,9 +225,6 @@ struct obj_slab {
     _try_release() {
 
         uint64_t reclaimed_vecs = freed_vecs;
-        DBG_PUSH_FRAME(reclaimed_vecs);
-        DBG_PUSH_FRAME(available_vecs);
-        DBG_PUSH_FRAME(state);
 
 
         if (reclaimed_vecs == 0) {
@@ -235,7 +233,6 @@ struct obj_slab {
 
             OBJ_SLAB_ASSERT(state == OWNED);
             state = UNOWNED;
-            DBG_PUSH_FRAME(state);
             return 1;
         }
 
@@ -258,7 +255,7 @@ struct obj_slab {
             atomic_unset(freed_slots + idx, reclaimed_slots);
 
             // since full in a sense we own all of the allocation vectors
-            available_slots[idx] = ~reclaimed_slots;
+            available_slots[idx] = reclaimed_slots;
 
         } while (index_iterator);
 

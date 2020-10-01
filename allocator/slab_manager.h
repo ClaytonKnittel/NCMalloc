@@ -11,7 +11,7 @@
 #include <allocator/obj_slab.h>
 #include <allocator/slab_allocation.h>
 
-#define SM_DBG_ASSERT(X)  // assert(X)
+#define SM_DBG_ASSERT(X)   assert(X)
 
 
 template<typename slab_t, uint32_t cache_size = 13>
