@@ -57,7 +57,7 @@ typedef struct _rseq_info rseq_info;
 #define _GENERIC_RSEQ_SUCCES 0
 
 __thread rseq_def __rseq_abi;
-__thread uint32_t rseq_refcount;
+__thread uint32_t rseq_refcount = 0;
 
 
 #endif

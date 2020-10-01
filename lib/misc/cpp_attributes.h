@@ -54,9 +54,8 @@
 #define NO_RETURN_ATTR __attribute__((noreturn))
 #define EXIT_FUNC COLD_ATTR NO_RETURN_ATTR NEVER_INLINE    
 
-
-#define bench_flush_all_pending()    asm volatile("" : : : "memory");
-#define bench_do_not_optimize_out(X) asm volatile("" : : "r,m"(X) : "memory")
+#define COMPILER_BARRIER()    asm volatile("" : : : "memory");
+#define COMPILER_DO_NOT_OPTIMIZE_OUT(X) asm volatile("" : : "r,m"(X) : "memory")
 
 // to prep avx instruction path
 #include <immintrin.h>

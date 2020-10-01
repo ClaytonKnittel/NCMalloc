@@ -1,0 +1,56 @@
+#ifndef _BACKTRACER_H_
+#define _BACKTRACER_H_
+
+struct frame {
+    uint64_t timestamp;
+    uint64_t bytes;
+    uint32_t ln;
+    char     fn[12];
+
+    to_string(uint64_t i, uint64_t tid, char * strout) {
+        sprintf(strout,
+                "[%lu] -> [%lu]: [%lu] %s:%d [ %016lx ]",
+                tid,
+                i,
+                timestamp,
+                fn,
+                ln,
+                bytes);
+    }
+};
+
+template<uint64_t n = 128>
+struct thread_frames {
+    uint64_t idx;
+    uint64_t tid;
+    frame    frames[n];
+
+    void ALWAYS_INLINE
+    push_frame(const uint32_t ln, const uint64_t bytes, const char * const fn) {
+        uint32_t f_idx      = (idx++) % n;
+        traces[f_idx].ln    = ln;
+        traces[f_idx].bytes = bytes;
+        memcpy(traces[f_idx].fn, fn, std::min<uint64_t>(strlen(fn), 11));
+        traces[f_idx].timestamp = _rdtsc();
+    }
+
+    void
+    show_frames() {
+        const uint32_t buflen = 128;
+        char           outbuf[buflen];
+        if (idx < n) {
+            for (uint64_t i = 0; i < idx; ++i) {
+                frames[i].to_string(outbuf);
+                fprintf(stderr, "%s\n", i, outbuf);
+            }
+        }
+        else {
+            for (uint64_t i = 1; i <= n; ++i) {
+                frames[(i + idx) % n].to_string(outbuf);
+                fprintf(stderr, "%s\n", i - 1, outbuf);
+            }
+        }
+    }
+};
+
+#endif

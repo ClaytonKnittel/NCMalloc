@@ -13,13 +13,8 @@ link_libraries("-lpthread")
 
 string ( REPLACE "/" "\/" remove_path_regex ${CMAKE_CURRENT_SOURCE_DIR} + "/")
 
-set(GEN_SYS_HEADER_FILE ";${CMAKE_CURRENT_SOURCE_DIR}/src/gen_system_header.cc")
-string ( REPLACE "/" "\/" REMOVE_GEN_SOURCE ${GEN_SYS_HEADER_FILE})
-
-
-file(GLOB EXE_SOURCES_0 src/*.cc)
-STRING( REGEX REPLACE "${REMOVE_GEN_SOURCE}" "" EXE_SOURCES_1 ${EXE_SOURCES_0})
-STRING( REPLACE ".cc" ".cc;" EXE_SOURCES ${EXE_SOURCES_1})
+file(GLOB DEP_SOURCES dep/*.cc)
+file(GLOB EXE_SOURCES src/*.cc)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(lib)
@@ -28,14 +23,22 @@ file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/lib/*.cc")
 
 
 
-add_executable(gen_sys_header ${GEN_SYS_HEADER_FILE} ${SOURCES})
-target_link_libraries(gen_sys_header)
-add_custom_target(run_gen_sys_header
-  COMMAND gen_sys_header
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMENT "Generating PRECOMPUTED_SYS_INFO.h"
-  SOURCES ${GEN_SYS_HEADER_FILE}
-  )
+foreach(DEP_SRC_CODE ${DEP_SOURCES})
+  STRING( REPLACE "dep/" "" _dep1 ${DEP_SRC_CODE})
+  STRING( REPLACE ".cc" "" _dep2 ${_dep1})
+  string( REGEX REPLACE ${remove_path_regex} "" DEP ${_dep2} )
+  add_executable(${DEP} ${DEP_SRC_CODE} ${SOURCES})
+
+  set(DEP_CMD "run_${DEP}")
+  add_custom_target(${DEP_CMD}
+    COMMAND ${DEP}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    SOURCES ${DEP_SRC_CODE}
+    COMMENT "Running: ${DEP}"
+    )
+  list(APPEND DEP_COMMANDS ${DEP_CMD})
+endforeach(DEP_SRC_CODE ${DEP_SOURCES})
+
 
 foreach(EXE_SRC_CODE ${EXE_SOURCES})
   STRING( REPLACE "src/" "" _exe1 ${EXE_SRC_CODE})
@@ -43,6 +46,9 @@ foreach(EXE_SRC_CODE ${EXE_SOURCES})
   string( REGEX REPLACE ${remove_path_regex} "" EXE ${_exe2} )
   add_executable(${EXE} ${EXE_SRC_CODE} ${SOURCES})
   target_link_libraries(${EXE})
-  add_dependencies(${EXE} run_gen_sys_header)
+  foreach(BUILD_DEP ${DEP_COMMANDS})
+    add_dependencies(${EXE} ${BUILD_DEP})
+  endforeach(BUILD_DEP ${DEP_COMMANDS})
 endforeach(EXE_SRC_CODE ${EXE_SOURCES})
+
 

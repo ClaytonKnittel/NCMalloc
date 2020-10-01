@@ -7,11 +7,19 @@
 #include <unistd.h>
 
 #include <misc/cpp_attributes.h>
+#include <misc/error_handling.h>
 
 #include "rseq_defines.h"
 
 #define RSEQ_SAFE_ACCESS(X)   (*(__volatile__ __typeof__(X) *)&(X))
 #define RSEQ_SAFE_WRITE(X, Y) RSEQ_SAFE_ACCESS(X) = (Y)
+
+void
+safe_rseq_syscall() {
+    ERROR_ASSERT(
+        syscall(NR_rseq, &__rseq_abi, sizeof(__rseq_abi), 0, RSEQ_SIGNATURE),
+        "Unable to initialize rseq\n");
+}
 
 void
 register_thread() {

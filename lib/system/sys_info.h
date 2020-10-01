@@ -943,6 +943,7 @@ create_defs(const char * outfile) {
     fprintf(fp, "// Physical memory address space bits\n");
     fprintf(fp, "#define PHYS_M_NBITS %d\n", PHYS_M_NBITS);
     fprintf(fp, "\n");
+#ifdef _WITH_KERNEL_INFO_
     fprintf(fp, "// Physical memory page offset (for vm -> pm) for kmalloc\n");
     fprintf(fp, "#define PAGE_OFFSET (0x%lxUL)\n", PAGE_OFFSET);
     fprintf(fp, "\n");
@@ -951,7 +952,7 @@ create_defs(const char * outfile) {
             "stuff)\n");
     fprintf(fp, "#define KERNEL_MEM_START (0x%lxUL)\n", KERNEL_MEM_START);
     fprintf(fp, "\n");
-
+#endif
     fprintf(fp, "// cache line size (should be same for L1, L2, and L3)\n");
     fprintf(fp, "#define CACHE_LINE_SIZE %d\n", CACHE_LINE_SIZE);
     fprintf(fp, "\n");
