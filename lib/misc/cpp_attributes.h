@@ -47,15 +47,19 @@
 #define NEVER_INLINE  __attribute__((noinline))
 
 
-#define HOT_ATTR   __attribute__((hot))
-#define COLD_ATTR  __attribute__((cold))
-#define PURE_ATTR  __attribute__((pure))
-#define CONST_ATTR __attribute__((const))
+#define HOT_ATTR       __attribute__((hot))
+#define COLD_ATTR      __attribute__((cold))
+#define PURE_ATTR      __attribute__((pure))
+#define CONST_ATTR     __attribute__((const))
 #define NO_RETURN_ATTR __attribute__((noreturn))
-#define EXIT_FUNC COLD_ATTR NO_RETURN_ATTR NEVER_INLINE    
+#define EXIT_FUNC      COLD_ATTR NO_RETURN_ATTR NEVER_INLINE
 
-#define COMPILER_BARRIER()    asm volatile("" : : : "memory");
+#define COMPILER_BARRIER()              asm volatile("" : : : "memory");
 #define COMPILER_DO_NOT_OPTIMIZE_OUT(X) asm volatile("" : : "r,m"(X) : "memory")
+
+#define ENTER_FOR_LOOP(cond, init, cmp, step)                                  \
+    IMPOSSIBLE_COND(!(cond));                                                  \
+    for (init; cmp; step)
 
 // to prep avx instruction path
 #include <immintrin.h>

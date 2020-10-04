@@ -77,8 +77,9 @@ struct obj_slab {
         const uint32_t nblocks = payload_size / _block_size;
         const uint32_t nslots  = (nblocks + 63) / 64;
 
-        available_vecs = ((1UL) << nslots) - 1;
 
+        available_vecs = ((nslots >= 64) ? 0 : ((1UL) << nslots)) - 1;
+                
         // fill all slots but last one that may start partially full
         memset(available_slots, -1, (nslots - 1) * sizeof(uint64_t));
 

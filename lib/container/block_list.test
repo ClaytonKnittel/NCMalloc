@@ -1,0 +1,197 @@
+#include <util/arg.h>
+#include <util/verbosity.h>
+
+uint32_t run_mask  = 0xf;
+uint64_t test_size = (1 << 20);
+uint64_t nthread   = (32);
+uint64_t nbytes    = (26);
+
+
+
+#include <container/block_list.h>
+
+#include <timing/timers.h>
+#include <list>
+
+
+struct alloc_region {
+    uint32_t   id;
+    uint32_t   size;
+    uint32_t * region;
+};
+
+#define BL
+#ifdef BL
+#define LIST             container::block_list<uint64_t>
+#define INIT             l.zero()
+#define INSERT(X)        l.insert(X)
+#define INSERT_DELETE(X) l.remove(l.insert(X))
+#define REMOVE(X)        l.remove(X)
+#else
+#define LIST std::list<uint64_t>
+#define INIT
+#define INSERT(X) l.push_front(X)
+#define INSERT_DELETE(X)                                                       \
+    l.push_front(X);                                                           \
+    l.erase(l.begin())
+
+#define REMOVE(X) l.erase(X)
+#endif
+
+uint64_t
+insert_only(uint32_t test_size) {
+    LIST l;
+    INIT;
+
+    const uint64_t start = timers::get_cycles();
+    ENTER_FOR_LOOP(test_size > 0, uint32_t i = 0, i < test_size, ++i) {
+        INSERT(0);
+    }
+    const uint64_t end = timers::get_cycles();
+
+    return end - start;
+}
+
+uint64_t
+insert_delete_insert(uint32_t test_size) {
+
+    LIST l;
+    INIT;
+#ifdef BL
+    using remove_t = uint64_t *;
+#else
+    using remove_t = decltype(l.begin());
+#endif
+
+
+    remove_t * to_remove = (remove_t *)calloc(test_size, sizeof(remove_t));
+
+    for (uint32_t i = 0; i < test_size; ++i) {
+        #ifdef BL
+        to_remove[i] = INSERT(0);
+        #else
+        INSERT(0);
+        to_remove[i] = l.begin();
+        #endif
+    }
+
+
+    for (uint32_t i = 0; i < 4 * test_size; ++i) {
+        uint32_t idx1   = rand() % test_size;
+        uint32_t idx2   = rand() % test_size;
+        remove_t tmp    = std::move(to_remove[idx1]);
+        to_remove[idx1] = to_remove[idx2];
+        to_remove[idx2] = tmp;
+    }
+
+    const uint64_t start = timers::get_cycles();
+    ENTER_FOR_LOOP(test_size > 0, uint32_t i = 0, i < test_size, ++i) {
+        REMOVE(to_remove[i]);
+    }
+    const uint64_t end = timers::get_cycles();
+
+    free(to_remove);
+    return end - start;
+}
+
+uint64_t
+insert_iterate(uint32_t test_size) {
+    LIST l;
+    INIT;
+
+    ENTER_FOR_LOOP(test_size > 0, uint32_t i = 0, i < test_size, ++i) {
+        INSERT(test_size);
+    }
+
+    const uint64_t start = timers::get_cycles();
+#ifdef BL
+    for (auto it = l.begin(); !(it.end()); ++it) {
+        COMPILER_DO_NOT_OPTIMIZE_OUT(*(it.get()));
+    }
+#else
+    for (auto it = l.begin(); it != l.end(); ++it) {
+        COMPILER_DO_NOT_OPTIMIZE_OUT(*it);
+    }
+#endif
+    const uint64_t end = timers::get_cycles();
+
+    return end - start;
+}
+
+uint64_t
+insert_iterate_skip(uint32_t test_size) {
+    LIST l;
+    INIT;
+
+    ENTER_FOR_LOOP(test_size > 0, uint32_t i = 0, i < test_size, ++i) {
+        INSERT(test_size);
+    }
+
+    const uint64_t start = timers::get_cycles();
+#ifdef BL
+    const uint64_t batch_mask = 0x5555555555555555;
+    for (auto it = l.begin_batch(batch_mask); !(it.end()); it.next_batch(batch_mask)) {
+        COMPILER_DO_NOT_OPTIMIZE_OUT(*(it.get()));
+    }
+#else
+    for (auto it = l.begin(); it != l.end(); ++it) {
+        COMPILER_DO_NOT_OPTIMIZE_OUT(*it);
+        ++it;
+    }
+#endif
+    const uint64_t end = timers::get_cycles();
+
+    return end - start;
+}
+
+
+uint64_t
+insert_delete(uint32_t test_size) {
+    LIST l;
+    INIT;
+
+    const uint64_t start = timers::get_cycles();
+    ENTER_FOR_LOOP(test_size > 0, uint32_t i = 0, i < test_size, ++i) {
+        INSERT_DELETE(0);
+    }
+    const uint64_t end = timers::get_cycles();
+
+    return end - start;
+}
+
+uint64_t
+insert_delete_half(uint32_t test_size) {
+    LIST l;
+    INIT;
+
+    const uint64_t start = timers::get_cycles();
+    ENTER_FOR_LOOP(test_size > 0, uint32_t i = 0, i < test_size, ++i) {
+        INSERT(0);
+        INSERT_DELETE(0);
+    }
+    const uint64_t end = timers::get_cycles();
+
+    return end - start;
+}
+
+
+uint32_t tsize = 10 * 1000 * 1000;
+int
+main(int argc, char ** argv) {
+    PREPARE_PARSER;
+    ADD_ARG("-n", false, Int, tsize, "Set n calls");
+    PARSE_ARGUMENTS;
+
+    double cycles = (double)insert_only(tsize);
+    fprintf(stderr, "Insert                 : %.3lf\n", cycles / tsize);
+    cycles = (double)insert_delete(tsize);
+    fprintf(stderr, "Insert Delete          : %.3lf\n", cycles / tsize);
+    cycles = (double)insert_delete_half(tsize);
+    fprintf(stderr, "Insert Delete Half     : %.3lf\n", cycles / tsize);
+    cycles = (double)insert_iterate(tsize);
+    fprintf(stderr, "Insert Iterate         : %.3lf\n", cycles / tsize);
+    cycles = (double)insert_iterate_skip(tsize);
+    fprintf(stderr, "Insert Iterate Skip    : %.3lf\n", cycles / tsize);
+    cycles = (double)insert_delete_insert(tsize);
+    fprintf(stderr, "Insert Delete Insert   : %.3lf\n", cycles / tsize);
+}

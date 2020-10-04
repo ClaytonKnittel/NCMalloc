@@ -1,0 +1,44 @@
+#ifndef _FAST_LIST_H_
+#define _FAST_LIST_H_
+
+#include <misc/cpp_attributes.h>
+#include <optimized/bits.h>
+
+namespace container {
+
+template<typename T>
+struct node {
+    T              obj;
+    const uint32_t idx;
+
+    node(T && _obj, const uint32_t _idx) : obj(_obj), idx(_idx) {}
+};
+
+template<typename T>
+struct node_block {
+    uint64_t        node_slots;
+    node_block<T> * next;
+    node_block<T> * prev;
+
+    node nodes[64];
+
+    uint32_t
+    insert(const T & obj) {
+        uint32_t idx = bits::find_first_one<uint64_t>(node_slots);
+        node_slots &= (node_slots - 1);
+        new ((void * const)(nodes + idx)) node(std::forward<T>(obj), idx);
+    }
+
+    uint32_t
+    insert(T && obj) {
+        return insert(std::move(obj));
+    }
+};
+
+template<typename T>
+struct fast_list {};
+
+
+}  // namespace container
+
+#endif

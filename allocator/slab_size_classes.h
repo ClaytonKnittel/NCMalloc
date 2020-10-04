@@ -2,8 +2,6 @@
 #define _SLAB_SIZE_CLASSES_H_
 
 #include <stdint.h>
-#define ALWAYS_INLINE inline __attribute__((always_inline))
-#define CONST_ATTR    __attribute__((const))
 
 static constexpr uint32_t num_size_classes             = 11;
 static constexpr uint32_t slab_sizes[num_size_classes] = { 8,   16,  24, 32,

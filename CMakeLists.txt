@@ -5,8 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
-#  -ggdb -fno-omit-frame-pointer -fno-rtti -fno-exceptions -fno-inline
-add_compile_options(-O3 -Wall -Wextra -Wno-unused-function -march=native -mtune=native)
+#  
+add_compile_options( -O3 -ggdb -fno-omit-frame-pointer -fno-rtti -fno-exceptions -fno-inline -Wall -Wextra -Wno-unused-function -march=native -mtune=native)
 
 
 link_libraries("-lpthread")

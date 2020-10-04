@@ -14,8 +14,7 @@
 #include <allocator/slab_size_classes.h>
 
 
-
-#define OBJ_DBG_ASSERT(X)  assert(X)
+#define OBJ_DBG_ASSERT(X) assert(X)
 
 namespace alloc {
 
@@ -102,6 +101,7 @@ struct object_allocator {
           end(calculate_end<slab_t>(((uint64_t)m) + sizeof(memory_layout_t),
                                     region_size)) {
         new (m) memory_layout_t(m, region_size);
+
     }
 
 
@@ -288,7 +288,6 @@ struct object_allocator {
             : "cc");
         // clang-format on
 #endif
-
     }
 
 
@@ -395,7 +394,6 @@ struct object_allocator {
 
             slab_manager_t * sm = m->slab_managers[size_idx] + start_cpu;
             slab_t *         _available_slabs_head = sm->available_slabs_head;
-
             OBJ_DBG_ASSERT(
                 (((uint64_t)_available_slabs_head) % sizeof(obj_slab)) == 0);
             OBJ_DBG_ASSERT((((uint64_t)(sm->available_slabs_head)) %
@@ -416,16 +414,14 @@ struct object_allocator {
                     return NULL;
                 }
                 new ((void * const)new_slab) slab_t(idx_to_size(size_idx));
-
+                
                 OBJ_DBG_ASSERT(new_slab != NULL);
                 OBJ_DBG_ASSERT(new_slab->next == NULL);
                 _send_slab(new_slab, size_idx);
-
             }
             else {
 
                 uint64_t ret = _available_slabs_head->_allocate(start_cpu);
-
                 if (BRANCH_LIKELY(ret < slab_t::SUCCESS_BOUND)) {
                     return (void *)(_available_slabs_head->payload +
                                     idx_to_size(size_idx) * ret);
