@@ -7,6 +7,8 @@
 #include <system/sys_info.h>
 
 
+#define SLAB_ALLOCATION_ASSERT(X) assert(X)
+
 namespace new_memory {
 enum FAILURE { MIGRATED = 1 };
 
@@ -18,7 +20,9 @@ struct shared_memory_slab_allocator {
     // Basically we just want current_slab to be aligned to
     // sizeof(slab) so that free can find its slab with modulo
     shared_memory_slab_allocator(uint64_t mem_region)
-        : current_slab(mem_region) {}
+        : current_slab(mem_region) {
+        SLAB_ALLOCATION_ASSERT(current_slab % sizeof(slab_t) == 0);
+    }
 
     uint32_t ALWAYS_INLINE PURE_ATTR
     out_of_memory(uint64_t end) const {

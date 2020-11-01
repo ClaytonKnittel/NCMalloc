@@ -333,10 +333,10 @@ struct block_list {
     void
     destroy() {
         node_block_t * tmp = available_list;
-        do {
+        while(tmp) {
             tmp->destroy();
             tmp = tmp->next_iter;
-        } while (tmp);
+        } 
     }
 
     void

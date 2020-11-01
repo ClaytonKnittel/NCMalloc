@@ -20,6 +20,8 @@ pthread_barrier_t b;
 
 using allocator_t = alloc::object_allocator<>;
 allocator_t allocator;
+uint64_t    success_bytes;
+uint64_t    success_calls;
 
 struct region {
     const uint32_t   id;
@@ -28,6 +30,8 @@ struct region {
 
     region(const uint32_t _id, const uint32_t _size, uint32_t * const _mem)
         : id(_id), size(_size / sizeof(uint32_t)), mem(_mem) {
+        assert(mem != NULL);
+        assert(allocator.in_range((uint64_t)mem));
         for (uint32_t i = 0; i < size; ++i) {
             mem[i] = _id;
         }
@@ -35,12 +39,12 @@ struct region {
 
     void
     verify() {
+        assert(mem != NULL);
         for (uint32_t i = 0; i < size; ++i) {
+
             assert(mem[i] == id);
         }
     }
-
-    ~region() {}
 };
 
 
@@ -71,18 +75,21 @@ struct alloc_tester {
         }
     }
 
-    void
+    uint32_t
     _new(uint32_t size) {
         void * r = allocator._allocate(size);
         if (BRANCH_LIKELY(r != NULL)) {
             region * _r = allocs.insert(region(++counter, size, (uint32_t *)r));
             _r->verify();
+            return 0;
         }
+        return 1;
     }
 
     void
     _delete() {
         region * r = allocs.pop();
+        assert(r != NULL);
         r->verify();
         allocator._free(r->mem);
     }
@@ -93,6 +100,7 @@ struct alloc_tester {
             for (single_node_iterator_t _it = it.nbegin(); !(_it.end());
                  ++_it) {
                 _it.get()->verify();
+                assert(_it.get()->mem != NULL);
                 allocator._free(_it.get()->mem);
             }
             it.get()->drop(batch_destroy_lo);
@@ -100,11 +108,43 @@ struct alloc_tester {
     }
 };
 
+struct simple_rng {
+    uint32_t cur;
+
+    simple_rng() : cur(rand()) {}
+
+    uint32_t
+    simple_rand() {
+        uint32_t hi, lo;
+
+        lo = 16807 * (cur & 0xffff);
+        hi = 16807 * (cur >> 16);
+
+        lo += (hi & 0x7fff) << 16;
+        lo += (hi >> 15);
+
+        if (lo > 0x7fffffff) {
+            lo -= 0x7fffffff;
+        }
+        cur = lo;
+        if (cur == 0) {
+            cur = rand();
+        }
+        return cur;
+    }
+};
+
 void *
 alloc_only(void * targ) {
     (void)(targ);
     init_thread();
+    simple_rng rng;
 
+    success_bytes = 0;
+    success_calls = 0;
+
+    uint64_t lbytes = 0;
+    uint64_t lcalls = 0;
 
     const uint32_t _test_size = test_size;
 
@@ -115,11 +155,17 @@ alloc_only(void * targ) {
     for (uint32_t i = 0; i < _test_size; ++i) {
         uint32_t size;
         do {
-            size = rand() % 144;
+            size = rng.simple_rand() % 144;
         } while (!size);
-        t._new(size);
+        if (!t._new(size)) {
+            lbytes += size;
+            ++lcalls;
+        }
     }
     t.verify_all();
+
+    __atomic_fetch_add(&success_bytes, lbytes, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&success_calls, lcalls, __ATOMIC_RELAXED);
     return NULL;
 }
 
@@ -127,7 +173,13 @@ void *
 alloc_free(void * targ) {
     (void)(targ);
     init_thread();
+    simple_rng rng;
 
+    success_bytes = 0;
+    success_calls = 0;
+
+    uint64_t lbytes = 0;
+    uint64_t lcalls = 0;
 
     const uint32_t _test_size = test_size;
 
@@ -138,12 +190,19 @@ alloc_free(void * targ) {
     for (uint32_t i = 0; i < _test_size; ++i) {
         uint32_t size;
         do {
-            size = rand() % 144;
+            size = rng.simple_rand() % 144;
         } while (!size);
-        t._new(size);
-        t._delete();
+        if (!t._new(size)) {
+            lbytes += size;
+            ++lcalls;
+
+            t._delete();
+        }
     }
     t.verify_all();
+
+    __atomic_fetch_add(&success_bytes, lbytes, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&success_calls, lcalls, __ATOMIC_RELAXED);
     return NULL;
 }
 
@@ -151,7 +210,13 @@ void *
 alloc_free_alloc(void * targ) {
     (void)(targ);
     init_thread();
+    simple_rng rng;
 
+    success_bytes = 0;
+    success_calls = 0;
+
+    uint64_t lbytes = 0;
+    uint64_t lcalls = 0;
 
     const uint32_t _test_size = test_size;
 
@@ -162,13 +227,23 @@ alloc_free_alloc(void * targ) {
     for (uint32_t i = 0; i < _test_size; ++i) {
         uint32_t size;
         do {
-            size = rand() % 144;
+            size = rng.simple_rand() % 144;
         } while (!size);
-        t._new(size);
-        t._delete();
-        t._new(size);
+        if (!t._new(size)) {
+            lbytes += size;
+            ++lcalls;
+            t._delete();
+        }
+
+        if (!t._new(size)) {
+            lbytes += size;
+            ++lcalls;
+        }
     }
     t.verify_all();
+
+    __atomic_fetch_add(&success_bytes, lbytes, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&success_calls, lcalls, __ATOMIC_RELAXED);
     return NULL;
 }
 
@@ -176,8 +251,12 @@ void *
 alloc_free_half(void * targ) {
     (void)(targ);
     init_thread();
+    simple_rng rng;
+    success_bytes = 0;
+    success_calls = 0;
 
-
+    uint64_t       lbytes     = 0;
+    uint64_t       lcalls     = 0;
     const uint32_t _test_size = test_size;
 
     alloc_tester t;
@@ -187,14 +266,20 @@ alloc_free_half(void * targ) {
     for (uint32_t i = 0; i < _test_size; ++i) {
         uint32_t size;
         do {
-            size = rand() % 144;
+            size = rng.simple_rand() % 144;
         } while (!size);
-        t._new(size);
-        if (i % 2) {
-            t._delete();
+        if (!t._new(size)) {
+            lbytes += size;
+            ++lcalls;
+            if (i % 2) {
+                t._delete();
+            }
         }
     }
     t.verify_all();
+
+    __atomic_fetch_add(&success_bytes, lbytes, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&success_calls, lcalls, __ATOMIC_RELAXED);
     return NULL;
 }
 
@@ -213,21 +298,23 @@ main(int argc, char ** argv) {
     fprintf(stderr, "%-24s", "Alloc Only Test");
     th.spawn_n(nthread, alloc_only, thelp::pin_policy::FIRST_N, NULL, 0);
     th.join_all();
-    fprintf(stderr, " - Passed\n");
+    fprintf(stderr, " - Passed [%lu (%.1E) / %lu]\n", success_bytes, (double)success_bytes, success_calls);
 
-
+    allocator.reset();
     fprintf(stderr, "%-24s", "Alloc Free Test");
     th.spawn_n(nthread, alloc_free, thelp::pin_policy::FIRST_N, NULL, 0);
     th.join_all();
-    fprintf(stderr, " - Passed\n");
+    fprintf(stderr, " - Passed [%lu / %lu]\n", success_bytes, success_calls);
 
+    allocator.reset();
     fprintf(stderr, "%-24s", "Alloc Free Alloc Test");
     th.spawn_n(nthread, alloc_free_alloc, thelp::pin_policy::FIRST_N, NULL, 0);
     th.join_all();
-    fprintf(stderr, " - Passed\n");
+    fprintf(stderr, " - Passed [%lu / %lu]\n", success_bytes, success_calls);
 
+    allocator.reset();
     fprintf(stderr, "%-24s", "Alloc Free Half Test");
     th.spawn_n(nthread, alloc_free_half, thelp::pin_policy::FIRST_N, NULL, 0);
     th.join_all();
-    fprintf(stderr, " - Passed\n");
+    fprintf(stderr, " - Passed [%lu / %lu]\n", success_bytes, success_calls);
 }

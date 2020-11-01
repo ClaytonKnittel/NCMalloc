@@ -29,16 +29,18 @@ calculate_start(uint64_t mem_region) {
 template<typename slab_t>
 static constexpr uint64_t
 calculate_end(uint64_t mem_region, uint64_t region_size) {
-    uint64_t misalignment = ((uint64_t)mem_region) % sizeof(slab_t);
-    if (misalignment) {
-        return calculate_start<slab_t>(mem_region) +
-               cmath::rounddown<uint64_t>((region_size - misalignment),
-                                          sizeof(slab_t));
-    }
-    else {
-        return mem_region +
-               cmath::rounddown<uint64_t>(region_size, sizeof(slab_t));
-    }
+    uint64_t meta_data_offset =
+        calculate_start<slab_t>(mem_region) - mem_region;
+    OBJ_DBG_ASSERT(calculate_start<slab_t>(mem_region) >= mem_region);
+    OBJ_DBG_ASSERT(calculate_start<slab_t>(mem_region) % sizeof(slab_t) == 0);
+    OBJ_DBG_ASSERT(cmath::rounddown<uint64_t>((region_size - meta_data_offset),
+                                              sizeof(slab_t)) %
+                       sizeof(slab_t) ==
+                   0);
+
+    return calculate_start<slab_t>(mem_region) +
+           cmath::rounddown<uint64_t>((region_size - meta_data_offset),
+                                      sizeof(slab_t));
 }
 
 
@@ -99,9 +101,10 @@ struct object_allocator {
     object_allocator(void * mem, uint64_t region_size)
         : m((memory_layout_t * const)mem),
           end(calculate_end<slab_t>(((uint64_t)m) + sizeof(memory_layout_t),
-                                    region_size)) {
-        new (m) memory_layout_t(m, region_size);
+                                    region_size - sizeof(memory_layout_t))) {
 
+        new (m) memory_layout_t(m, region_size);
+        OBJ_DBG_ASSERT(end % sizeof(slab_t) == 0);
     }
 
 
@@ -414,7 +417,7 @@ struct object_allocator {
                     return NULL;
                 }
                 new ((void * const)new_slab) slab_t(idx_to_size(size_idx));
-                
+
                 OBJ_DBG_ASSERT(new_slab != NULL);
                 OBJ_DBG_ASSERT(new_slab->next == NULL);
                 _send_slab(new_slab, size_idx);
